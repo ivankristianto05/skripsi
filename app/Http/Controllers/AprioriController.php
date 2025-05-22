@@ -21,14 +21,8 @@ class AprioriController extends Controller
         }
 
         // Tampilkan atau kirim ke view
-        dd($data);
+        //dd($data);
     }
-
-    // public function index()
-    // {
-    //     $rules = AprioriService::generateRules(0, 0); // Min support: 2, Min confidence: 0.5
-    //     return view('rekomendasi.rules', compact('rules'));
-    // }
 
     public function aturan()
 {
@@ -41,5 +35,13 @@ class AprioriController extends Controller
     return view('apriori.rules', compact('rules'));
 }
 
-    
+public function showItemsets()
+{
+    // Menampilkan kombinasi itemset dari produk yang ada
+    $minSupport = 0; // Sesuaikan dengan kebutuhan Anda
+    $itemsets = AprioriService::getCustomItemsets($minSupport);
+
+    // Menampilkan itemset 1, 2, dan 3
+    dd($itemsets); // Menggunakan dd() untuk melihat hasil kombinasi itemset
+}
 }

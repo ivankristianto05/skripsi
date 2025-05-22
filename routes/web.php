@@ -19,3 +19,4 @@ Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 Route::get('/apriori/data', [\App\Http\Controllers\AprioriController::class, 'getFormattedTransaksi']);
 Route::get('/apriori/aturan', [\App\Http\Controllers\AprioriController::class, 'aturan'])->name('apriori.aturan');
 Route::get('/apriori/rules', [\App\Http\Controllers\AprioriController::class, 'aturan'])->name('apriori.rules');
+Route::get('/show-itemsets', [\App\Http\Controllers\AprioriController::class, 'showItemsets']);
