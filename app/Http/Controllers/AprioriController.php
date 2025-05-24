@@ -1,6 +1,6 @@
 <?php
 namespace App\Http\Controllers;
-
+set_time_limit(600);
 use App\Services\AprioriService;
 use App\Models\Produk;
 use App\Models\Transaksi;
@@ -25,23 +25,28 @@ class AprioriController extends Controller
     }
 
     public function aturan()
-{
-    // Mengambil aturan asosiasi (rules)
-    $minSupport = 0; // Sesuaikan dengan kebutuhan Anda
-    $minConfidence = 0; // Sesuaikan dengan kebutuhan Anda
-    $rules = AprioriService::generateRules($minSupport, $minConfidence);
+    {
+        // Mengambil frequent itemsets dan association rules
+        $minSupport = 0.1; // 10% minimum support
+        $minConfidence = 0.1; // 50% minimum confidence
+        
+        // Ambil frequent itemsets
+        $frequentItemsets = AprioriService::getCustomItemsets($minSupport);
+        
+        // Ambil association rules
+        $rules = AprioriService::generateAssociationRules($minSupport, $minConfidence);
 
-    // Kirim data aturan (rules) ke view 'apriori.aturan'
-    return view('apriori.rules', compact('rules'));
-}
+        // Kirim data ke view
+        return view('apriori.aturan', compact('frequentItemsets', 'rules', 'minSupport', 'minConfidence'));
+    }
 
-public function showItemsets()
-{
-    // Menampilkan kombinasi itemset dari produk yang ada
-    $minSupport = 0; // Sesuaikan dengan kebutuhan Anda
-    $itemsets = AprioriService::getCustomItemsets($minSupport);
+    public function showItemsets()
+    {
+        // Menampilkan kombinasi itemset dari produk yang ada
+        $minSupport = 0.1; // 10% minimum support
+        $itemsets = AprioriService::getCustomItemsets($minSupport);
 
-    // Menampilkan itemset 1, 2, dan 3
-    dd($itemsets); // Menggunakan dd() untuk melihat hasil kombinasi itemset
-}
+        // Menampilkan itemset 1, 2, dan 3
+        dd($itemsets); // Menggunakan dd() untuk melihat hasil kombinasi itemset
+    }
 }
