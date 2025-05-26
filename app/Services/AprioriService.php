@@ -7,7 +7,7 @@ use App\Models\ProdukTransaksi;
 
 class AprioriService
 {
-    public static function getCustomItemsets($minSupport = 0.1)
+    public static function getCustomItemsets($minSupport = 0.1, $targetTembakau = null)
     {
         // Ambil daftar produk beserta kategorinya
         $produkKategori = Produk::pluck('kategori_produk', 'kode_produk')->toArray();
@@ -20,34 +20,62 @@ class AprioriService
         $itemset2 = [];
         $itemset3 = [];
 
-        // Membuat 1-itemset (individual items)
-        foreach ($produk as $produkItem) {
-            $itemset1[] = [$produkItem->kode_produk];
-        }
+        // Filter produk berdasarkan target tembakau jika ada
+        if ($targetTembakau) {
+            // Membuat 1-itemset hanya untuk target tembakau
+            $itemset1[] = [$targetTembakau];
 
-        // Membuat kombinasi 2-itemset dan 3-itemset dari produk dengan kategori berbeda
-        foreach ($produk as $produkA) {
+            // Membuat kombinasi 2-itemset dan 3-itemset yang melibatkan target tembakau
             foreach ($produk as $produkB) {
-                // Pastikan produk A dan B berbeda kode dan berasal dari kategori yang berbeda
-                if ($produkA->kode_produk != $produkB->kode_produk && 
-                    $produkKategori[$produkA->kode_produk] != $produkKategori[$produkB->kode_produk]) {
+                // Pastikan produk B berbeda dari target tembakau dan berasal dari kategori yang berbeda
+                if ($produkB->kode_produk != $targetTembakau && 
+                    $produkKategori[$targetTembakau] != $produkKategori[$produkB->kode_produk]) {
                     
-                    // Kombinasi 2-itemset
-                    $combination2 = [$produkA->kode_produk, $produkB->kode_produk];
-                    sort($combination2); // Urutkan untuk konsistensi
+                    // Kombinasi 2-itemset dengan target tembakau
+                    $combination2 = [$targetTembakau, $produkB->kode_produk];
+                    sort($combination2);
                     $itemset2[] = $combination2;
 
                     foreach ($produk as $produkC) {
-                        // Pastikan produk C berbeda dari A dan B, dan berasal dari kategori yang berbeda
-                        if ($produkC->kode_produk != $produkA->kode_produk && 
+                        // Pastikan produk C berbeda dari target tembakau dan B, dan berasal dari kategori yang berbeda
+                        if ($produkC->kode_produk != $targetTembakau && 
                             $produkC->kode_produk != $produkB->kode_produk &&
-                            $produkKategori[$produkC->kode_produk] != $produkKategori[$produkA->kode_produk] &&
+                            $produkKategori[$produkC->kode_produk] != $produkKategori[$targetTembakau] &&
                             $produkKategori[$produkC->kode_produk] != $produkKategori[$produkB->kode_produk]) {
                             
-                            // Kombinasi 3-itemset
-                            $combination3 = [$produkA->kode_produk, $produkB->kode_produk, $produkC->kode_produk];
-                            sort($combination3); // Urutkan untuk konsistensi
+                            // Kombinasi 3-itemset dengan target tembakau
+                            $combination3 = [$targetTembakau, $produkB->kode_produk, $produkC->kode_produk];
+                            sort($combination3);
                             $itemset3[] = $combination3;
+                        }
+                    }
+                }
+            }
+        } else {
+            // Logika asli jika tidak ada filter tembakau
+            foreach ($produk as $produkItem) {
+                $itemset1[] = [$produkItem->kode_produk];
+            }
+
+            foreach ($produk as $produkA) {
+                foreach ($produk as $produkB) {
+                    if ($produkA->kode_produk != $produkB->kode_produk && 
+                        $produkKategori[$produkA->kode_produk] != $produkKategori[$produkB->kode_produk]) {
+                        
+                        $combination2 = [$produkA->kode_produk, $produkB->kode_produk];
+                        sort($combination2);
+                        $itemset2[] = $combination2;
+
+                        foreach ($produk as $produkC) {
+                            if ($produkC->kode_produk != $produkA->kode_produk && 
+                                $produkC->kode_produk != $produkB->kode_produk &&
+                                $produkKategori[$produkC->kode_produk] != $produkKategori[$produkA->kode_produk] &&
+                                $produkKategori[$produkC->kode_produk] != $produkKategori[$produkB->kode_produk]) {
+                                
+                                $combination3 = [$produkA->kode_produk, $produkB->kode_produk, $produkC->kode_produk];
+                                sort($combination3);
+                                $itemset3[] = $combination3;
+                            }
                         }
                     }
                 }
@@ -75,6 +103,7 @@ class AprioriService
             'itemsets_2' => self::translateItemsetsWithSupport($itemset2WithSupport, $produkNama),
             'itemsets_3' => self::translateItemsetsWithSupport($itemset3WithSupport, $produkNama),
             'total_transactions' => self::getTotalTransactions(),
+            'target_tembakau' => $targetTembakau ? $produkNama[$targetTembakau] : null,
         ];
 
         return $frequentItemsets;
@@ -209,23 +238,45 @@ class AprioriService
         return $itemsets;
     }
 
-    // Fungsi tambahan untuk mendapatkan association rules
-    public static function generateAssociationRules($minSupport = 0.1, $minConfidence = 0.5)
+    // Fungsi tambahan untuk mendapatkan association rules dengan filter
+    public static function generateAssociationRules($minSupport = 0.1, $minConfidence = 0.5, $targetTembakau = null)
     {
-        $frequentItemsets = self::getCustomItemsets($minSupport);
+        $frequentItemsets = self::getCustomItemsets($minSupport, $targetTembakau);
         $rules = [];
 
         // Generate rules dari 2-itemsets
         foreach ($frequentItemsets['itemsets_2'] as $itemset) {
             $codes = $itemset['itemset_codes'];
             if (count($codes) == 2) {
-                // Rule A -> B
-                $ruleAB = self::calculateRule([$codes[0]], [$codes[1]], $minConfidence);
-                if ($ruleAB) $rules[] = $ruleAB;
+                // Jika ada filter tembakau, pastikan salah satu adalah tembakau target
+                if ($targetTembakau) {
+                    if (in_array($targetTembakau, $codes)) {
+                        // Rule tembakau -> produk lain
+                        if ($codes[0] == $targetTembakau) {
+                            $rule = self::calculateRule([$codes[0]], [$codes[1]], $minConfidence);
+                            if ($rule) $rules[] = $rule;
+                        } else {
+                            $rule = self::calculateRule([$codes[1]], [$codes[0]], $minConfidence);
+                            if ($rule) $rules[] = $rule;
+                        }
+                        
+                        // Rule produk lain -> tembakau
+                        if ($codes[0] == $targetTembakau) {
+                            $rule = self::calculateRule([$codes[1]], [$codes[0]], $minConfidence);
+                            if ($rule) $rules[] = $rule;
+                        } else {
+                            $rule = self::calculateRule([$codes[0]], [$codes[1]], $minConfidence);
+                            if ($rule) $rules[] = $rule;
+                        }
+                    }
+                } else {
+                    // Logika asli tanpa filter
+                    $ruleAB = self::calculateRule([$codes[0]], [$codes[1]], $minConfidence);
+                    if ($ruleAB) $rules[] = $ruleAB;
 
-                // Rule B -> A
-                $ruleBA = self::calculateRule([$codes[1]], [$codes[0]], $minConfidence);
-                if ($ruleBA) $rules[] = $ruleBA;
+                    $ruleBA = self::calculateRule([$codes[1]], [$codes[0]], $minConfidence);
+                    if ($ruleBA) $rules[] = $ruleBA;
+                }
             }
         }
 
@@ -233,20 +284,37 @@ class AprioriService
         foreach ($frequentItemsets['itemsets_3'] as $itemset) {
             $codes = $itemset['itemset_codes'];
             if (count($codes) == 3) {
-                // Rules dengan 1 antecedent, 2 consequent
-                for ($i = 0; $i < 3; $i++) {
-                    $antecedent = [$codes[$i]];
-                    $consequent = array_values(array_diff($codes, $antecedent));
-                    $rule = self::calculateRule($antecedent, $consequent, $minConfidence);
+                // Jika ada filter tembakau, pastikan tembakau target ada dalam itemset
+                if ($targetTembakau && in_array($targetTembakau, $codes)) {
+                    // Rules dengan tembakau sebagai antecedent
+                    $consequent = array_values(array_diff($codes, [$targetTembakau]));
+                    $rule = self::calculateRule([$targetTembakau], $consequent, $minConfidence);
                     if ($rule) $rules[] = $rule;
-                }
 
-                // Rules dengan 2 antecedent, 1 consequent
-                for ($i = 0; $i < 3; $i++) {
-                    $consequent = [$codes[$i]];
-                    $antecedent = array_values(array_diff($codes, $consequent));
-                    $rule = self::calculateRule($antecedent, $consequent, $minConfidence);
-                    if ($rule) $rules[] = $rule;
+                    // Rules dengan tembakau sebagai consequent
+                    foreach ($codes as $kodeProduk) {
+                        if ($kodeProduk != $targetTembakau) {
+                            $antecedent = [$kodeProduk];
+                            $consequent = [$targetTembakau];
+                            $rule = self::calculateRule($antecedent, $consequent, $minConfidence);
+                            if ($rule) $rules[] = $rule;
+                        }
+                    }
+                } elseif (!$targetTembakau) {
+                    // Logika asli tanpa filter
+                    for ($i = 0; $i < 3; $i++) {
+                        $antecedent = [$codes[$i]];
+                        $consequent = array_values(array_diff($codes, $antecedent));
+                        $rule = self::calculateRule($antecedent, $consequent, $minConfidence);
+                        if ($rule) $rules[] = $rule;
+                    }
+
+                    for ($i = 0; $i < 3; $i++) {
+                        $consequent = [$codes[$i]];
+                        $antecedent = array_values(array_diff($codes, $consequent));
+                        $rule = self::calculateRule($antecedent, $consequent, $minConfidence);
+                        if ($rule) $rules[] = $rule;
+                    }
                 }
             }
         }
@@ -271,19 +339,90 @@ class AprioriService
         
         if ($confidence >= $minConfidence) {
             $produkNama = Produk::pluck('nama_produk', 'kode_produk')->toArray();
+            $totalTransactions = self::getTotalTransactions();
             
             return [
                 'antecedent' => array_map(fn($code) => $produkNama[$code] ?? $code, $antecedent),
                 'consequent' => array_map(fn($code) => $produkNama[$code] ?? $code, $consequent),
                 'antecedent_codes' => $antecedent,
                 'consequent_codes' => $consequent,
-                'antecedent_support' => $antecedentSupport,
-                'union_support' => $unionSupport,
                 'confidence' => round($confidence, 4),
-                'total_transactions' => self::getTotalTransactions()
+                'antecedent_support' => $antecedentSupport,
+                'union_support' => $unionSupport, // Changed from 'support' to 'union_support'
+                'support_percentage' => round($unionSupport / $totalTransactions, 4),
+                'lift' => self::calculateLift($antecedent, $consequent)
             ];
         }
         
         return null;
+    }
+
+    // Fungsi untuk menghitung lift dari rule
+    private static function calculateLift($antecedent, $consequent)
+    {
+        $totalTransactions = self::getTotalTransactions();
+        $antecedentSupport = self::getSupportCount($antecedent);
+        $consequentSupport = self::getSupportCount($consequent);
+        $unionSupport = self::getSupportCount(array_merge($antecedent, $consequent));
+        
+        if ($antecedentSupport == 0 || $consequentSupport == 0 || $totalTransactions == 0) {
+            return 0;
+        }
+        
+        $confidence = $unionSupport / $antecedentSupport;
+        $consequentProbability = $consequentSupport / $totalTransactions;
+        
+        if ($consequentProbability == 0) return 0;
+        
+        $lift = $confidence / $consequentProbability;
+        
+        return round($lift, 4);
+    }
+
+    // Fungsi tambahan untuk mendapatkan statistik dasar
+    public static function getBasicStatistics()
+    {
+        $totalTransactions = self::getTotalTransactions();
+        $totalProducts = Produk::count();
+        $avgProductsPerTransaction = 0;
+        
+        if ($totalTransactions > 0) {
+            $totalProductsInTransactions = ProdukTransaksi::count();
+            $avgProductsPerTransaction = round($totalProductsInTransactions / $totalTransactions, 2);
+        }
+        
+        return [
+            'total_transactions' => $totalTransactions,
+            'total_products' => $totalProducts,
+            'avg_products_per_transaction' => $avgProductsPerTransaction,
+            'products_by_category' => Produk::selectRaw('kategori_produk, COUNT(*) as count')
+                                            ->groupBy('kategori_produk')
+                                            ->pluck('count', 'kategori_produk')
+                                            ->toArray()
+        ];
+    }
+
+    // Fungsi untuk mendapatkan top selling products
+    public static function getTopSellingProducts($limit = 10)
+    {
+        $topProducts = ProdukTransaksi::selectRaw('kode_produk, COUNT(*) as frequency')
+                                     ->groupBy('kode_produk')
+                                     ->orderBy('frequency', 'desc')
+                                     ->limit($limit)
+                                     ->get();
+        
+        $produkNama = Produk::pluck('nama_produk', 'kode_produk')->toArray();
+        
+        $result = [];
+        foreach ($topProducts as $product) {
+            $result[] = [
+                'kode_produk' => $product->kode_produk,
+                'nama_produk' => $produkNama[$product->kode_produk] ?? $product->kode_produk,
+                'frequency' => $product->frequency,
+                'percentage' => round($product->frequency / self::getTotalTransactions() * 100, 2)
+            ];
+        }
+        
+        return $result;
     }
 }
