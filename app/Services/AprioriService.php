@@ -13,6 +13,9 @@ class AprioriService
         $produkKategori = Produk::pluck('kategori_produk', 'kode_produk')->toArray();
         $produkNama = Produk::pluck('nama_produk', 'kode_produk')->toArray();
 
+        // Tentukan urutan kategori berdasarkan target yang dipilih
+        $kategoriUrutan = self::getDynamicCategoryOrder($targetTembakau, $produkKategori);
+
         // Ambil semua produk yang ada di database
         $produk = Produk::all();
 
@@ -33,7 +36,7 @@ class AprioriService
                     
                     // Kombinasi 2-itemset dengan target tembakau
                     $combination2 = [$targetTembakau, $produkB->kode_produk];
-                    sort($combination2);
+                    $combination2 = self::sortItemsByCategory($combination2, $produkKategori, $kategoriUrutan);
                     $itemset2[] = $combination2;
 
                     foreach ($produk as $produkC) {
@@ -45,14 +48,16 @@ class AprioriService
                             
                             // Kombinasi 3-itemset dengan target tembakau
                             $combination3 = [$targetTembakau, $produkB->kode_produk, $produkC->kode_produk];
-                            sort($combination3);
+                            $combination3 = self::sortItemsByCategory($combination3, $produkKategori, $kategoriUrutan);
                             $itemset3[] = $combination3;
                         }
                     }
                 }
             }
         } else {
-            // Logika asli jika tidak ada filter tembakau
+            // Logika asli jika tidak ada filter tembakau (menggunakan urutan default)
+            $kategoriUrutan = ['tembakau' => 1, 'filter' => 2, 'kertas' => 3];
+            
             foreach ($produk as $produkItem) {
                 $itemset1[] = [$produkItem->kode_produk];
             }
@@ -63,7 +68,7 @@ class AprioriService
                         $produkKategori[$produkA->kode_produk] != $produkKategori[$produkB->kode_produk]) {
                         
                         $combination2 = [$produkA->kode_produk, $produkB->kode_produk];
-                        sort($combination2);
+                        $combination2 = self::sortItemsByCategory($combination2, $produkKategori, $kategoriUrutan);
                         $itemset2[] = $combination2;
 
                         foreach ($produk as $produkC) {
@@ -73,7 +78,7 @@ class AprioriService
                                 $produkKategori[$produkC->kode_produk] != $produkKategori[$produkB->kode_produk]) {
                                 
                                 $combination3 = [$produkA->kode_produk, $produkB->kode_produk, $produkC->kode_produk];
-                                sort($combination3);
+                                $combination3 = self::sortItemsByCategory($combination3, $produkKategori, $kategoriUrutan);
                                 $itemset3[] = $combination3;
                             }
                         }
@@ -86,11 +91,6 @@ class AprioriService
         $itemset1 = self::removeDuplicateArrays($itemset1);
         $itemset2 = self::removeDuplicateArrays($itemset2);
         $itemset3 = self::removeDuplicateArrays($itemset3);
-        
-        // Mengurutkan itemset berdasarkan kategori produk
-        $itemset1 = self::sortItemsetByCategory($itemset1, $produkKategori);
-        $itemset2 = self::sortItemsetByCategory($itemset2, $produkKategori);
-        $itemset3 = self::sortItemsetByCategory($itemset3, $produkKategori);
 
         // Menghitung support untuk setiap itemset
         $itemset1WithSupport = self::calculateSupport($itemset1, $minSupport);
@@ -104,9 +104,54 @@ class AprioriService
             'itemsets_3' => self::translateItemsetsWithSupport($itemset3WithSupport, $produkNama),
             'total_transactions' => self::getTotalTransactions(),
             'target_tembakau' => $targetTembakau ? $produkNama[$targetTembakau] : null,
+            'category_order' => $kategoriUrutan, // Tambahkan info urutan kategori
         ];
 
         return $frequentItemsets;
+    }
+
+    /**
+     * Menentukan urutan kategori berdasarkan target yang dipilih user
+     */
+    private static function getDynamicCategoryOrder($targetKode, $produkKategori)
+    {
+        // Jika tidak ada target, gunakan urutan default
+        if (!$targetKode) {
+            return ['tembakau' => 1, 'filter' => 2, 'kertas' => 3];
+        }
+
+        // Ambil kategori dari target yang dipilih
+        $targetKategori = $produkKategori[$targetKode] ?? 'tembakau';
+
+        // Buat urutan berdasarkan kategori target
+        switch ($targetKategori) {
+            case 'tembakau':
+                return ['tembakau' => 1, 'filter' => 2, 'kertas' => 3];
+            case 'filter':
+                return ['filter' => 1, 'tembakau' => 2, 'kertas' => 3];
+            case 'kertas':
+                return ['kertas' => 1, 'tembakau' => 2, 'filter' => 3];
+            default:
+                return ['tembakau' => 1, 'filter' => 2, 'kertas' => 3];
+        }
+    }
+
+    /**
+     * Mengurutkan item dalam array berdasarkan kategori dengan urutan yang ditentukan
+     */
+    private static function sortItemsByCategory($items, $produkKategori, $kategoriUrutan)
+    {
+        usort($items, function($kodeProdukA, $kodeProdukB) use ($produkKategori, $kategoriUrutan) {
+            $kategoriA = $produkKategori[$kodeProdukA] ?? 'unknown';
+            $kategoriB = $produkKategori[$kodeProdukB] ?? 'unknown';
+            
+            $prioritasA = $kategoriUrutan[$kategoriA] ?? 999;
+            $prioritasB = $kategoriUrutan[$kategoriB] ?? 999;
+            
+            return $prioritasA <=> $prioritasB;
+        });
+
+        return $items;
     }
 
     // Fungsi untuk menghitung support dari itemset
@@ -214,28 +259,6 @@ class AprioriService
         }
 
         return $uniqueArrays;
-    }
-
-    // Fungsi untuk mengurutkan itemset berdasarkan kategori
-    private static function sortItemsetByCategory($itemsets, $produkKategori)
-    {
-        // Definisi urutan kategori
-        $kategoriUrutan = ['tembakau' => 1, 'filter' => 2, 'kertas' => 3];
-
-        // Urutkan setiap itemset berdasarkan kategori produk
-        foreach ($itemsets as &$itemset) {
-            usort($itemset, function($kodeProdukA, $kodeProdukB) use ($produkKategori, $kategoriUrutan) {
-                $kategoriA = $produkKategori[$kodeProdukA] ?? 'unknown';
-                $kategoriB = $produkKategori[$kodeProdukB] ?? 'unknown';
-                
-                $prioritasA = $kategoriUrutan[$kategoriA] ?? 999;
-                $prioritasB = $kategoriUrutan[$kategoriB] ?? 999;
-                
-                return $prioritasA <=> $prioritasB;
-            });
-        }
-
-        return $itemsets;
     }
 
     // Fungsi tambahan untuk mendapatkan association rules dengan filter
@@ -348,7 +371,7 @@ class AprioriService
                 'consequent_codes' => $consequent,
                 'confidence' => round($confidence, 4),
                 'antecedent_support' => $antecedentSupport,
-                'union_support' => $unionSupport, // Changed from 'support' to 'union_support'
+                'union_support' => $unionSupport,
                 'support_percentage' => round($unionSupport / $totalTransactions, 4),
                 'lift' => self::calculateLift($antecedent, $consequent)
             ];

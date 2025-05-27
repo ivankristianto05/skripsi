@@ -4,7 +4,7 @@
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
-            <h1 class="mb-4">Analisis Apriori - Frequent Itemsets & Association Rules</h1>
+            <h1 class="mb-4">Analisis Apriori</h1>
             
             <!-- Info Summary -->
             <div class="row mb-4">
