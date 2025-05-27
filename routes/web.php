@@ -25,9 +25,11 @@ Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
 // Route untuk menampilkan form input parameter untuk analisis Apriori
 Route::get('/apriori', [AprioriController::class, 'index'])->name('apriori.index'); // Form input parameter
+Route::post('/apriori/proses', [AprioriController::class, 'prosesApriori'])->name('apriori.proses');
 
 // Route untuk proses analisis Apriori dan menampilkan hasil
-Route::post('/apriori/aturan', [AprioriController::class, 'aturan'])->name('apriori.aturan');
+Route::get('/apriori/aturan/hasil/{batchId}', [AprioriController::class, 'hasilProcessing'])->name('apriori.hasil.interaktif');
 
 // Route untuk menampilkan kombinasi itemset (untuk testing)
 Route::get('/show-itemsets', [AprioriController::class, 'showItemsets']);
+Route::get('/apriori/hasil', [AprioriController::class, 'tampilkanHasilGlobal'])->name('apriori.hasil.global');

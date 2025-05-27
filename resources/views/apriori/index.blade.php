@@ -12,7 +12,7 @@
                     <small class="text-muted">Tentukan parameter untuk menemukan pola pembelian produk</small>
                 </div>
                 <div class="card-body">
-                    <form action="{{ route('apriori.aturan') }}" method="POST">
+                    <form action="{{ route('apriori.proses') }}" method="POST">
                         @csrf
                         
                         <div class="row g-5">
