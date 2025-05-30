@@ -12,31 +12,28 @@ use Illuminate\Support\Str; // Untuk UUID
 
 class AprioriService
 {
-    /**
-     * Dispatch job untuk menghasilkan itemset di background.
-     *
-     * @param float $minSupport
-     * @param string|null $targetTembakau
-     * @return string Kunci cache yang akan digunakan untuk menyimpan hasil.
-     */
-    public static function dispatchItemsetCombinationJob($minSupportThreshold = 0.1, $targetProdukKode = null, $existingBatchId = null)
-    {
+    public static function dispatchItemsetCombinationJob(
+        $minSupportThreshold = 0.1,
+        $targetProdukKode = null,
+        $existingBatchId = null,
+        $minConfidenceThreshold = 0.1 // Tambahkan parameter ini
+    ) {
         $aprioriBatchId = $existingBatchId ?: (string) Str::uuid();
 
-        ProcessAprioriItemsets::dispatch($minSupportThreshold, $targetProdukKode, $aprioriBatchId);
+        // Teruskan $minConfidenceThreshold ke constructor ProcessAprioriItemsets
+        ProcessAprioriItemsets::dispatch(
+            $minSupportThreshold,
+            $targetProdukKode,
+            $aprioriBatchId,
+            $minConfidenceThreshold // Parameter baru diteruskan
+        );
 
         $context = $targetProdukKode ? "Interaktif (Target: {$targetProdukKode})" : "Global";
-        Log::info("AprioriService: Dispatched ProcessAprioriItemsets job (Job 1). Context: {$context}, Batch ID: {$aprioriBatchId}, MinSupport for Job 2: {$minSupportThreshold}");
+        Log::info("AprioriService: Dispatched ProcessAprioriItemsets job (Job 1). Context: {$context}, Batch ID: {$aprioriBatchId}, MinSupport for Job 2: {$minSupportThreshold}, MinConfidence for Job 3: {$minConfidenceThreshold}");
 
         return $aprioriBatchId;
     }
-
-    /**
-     * Mengambil hasil frequent itemsets yang telah diproses oleh job.
-     *
-     * @param string $cacheKey
-     * @return array|null Hasil itemset atau null jika belum tersedia/gagal.
-     */
+                                                            
     public static function getProcessedItemsets($cacheKey)
     {
         // Logika ini mungkin tidak lagi relevan jika hasil disimpan di DB dan status via Cache keys global
@@ -193,12 +190,6 @@ class AprioriService
         }
         return $uniqueArrays;
     }
-
-
-    /**
-     * Generate association rules.
-     * Method ini sekarang akan mengambil frequent itemsets dari cache.
-     */
     public static function generateAssociationRules($itemsetCacheKey, $minConfidence = 0.5)
     {
         $frequentItemsets = self::getProcessedItemsets($itemsetCacheKey);

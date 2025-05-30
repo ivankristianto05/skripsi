@@ -44,7 +44,7 @@
                 <div class="card-body d-flex flex-column justify-content-between">
                     <h3 class="card-title">Paket A</h3>
                     <p class="card-text">Rekomendasi paket tembakau berdasarkan data transaksi.</p>
-                    <a href="{{ route('apriori.aturan') }}" class="btn btn-light mt-auto">Lihat Rekomendasi</a>
+                    <a href="{{ route('apriori.index') }}" class="btn btn-light mt-auto">Lihat Rekomendasi</a>
                 </div>
             </div>
         </div>
