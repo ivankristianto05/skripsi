@@ -178,7 +178,10 @@
                 <i class="bi bi-cart"></i> <span>Transaksi</span>
             </a>
             <a href="{{ route('apriori.index') }}" title="Pengujian" class="{{ request()->routeIs('apriori.index') ? 'active' : '' }}">
-                <i class="bi bi-diagram-3"></i> <span>Rekomendasi</span>
+                <i class="bi bi-diagram-3"></i> <span>Pengujian</span>
+            </a>
+            <a href="{{ route('apriori.hasil.global') }}" title="Hasil Global Apriori" class="{{ request()->routeIs('apriori.hasil.global') ? 'active' : '' }}">
+                <i class="bi bi-globe"></i> <span>Rekomendasi</span>
             </a>
         </div>
     </div>

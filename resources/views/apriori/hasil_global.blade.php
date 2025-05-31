@@ -1,111 +1,164 @@
 @extends('layout')
 
 @section('content')
-<div class="container">
-    <h1>Hasil Pemrosesan Apriori Global</h1>
-    <p><strong>Batch ID Proses Global:</strong> {{ $batchId ?: 'Belum ada proses aktif' }}</p>
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h1 class="mb-0 h4"><i class="fas fa-globe"></i> Hasil Pemrosesan Apriori Global</h1>
+        </div>
+        <div class="card-body">
+            <p class="mb-2"><strong>Batch ID Proses Global:</strong>
+                <span class="badge bg-secondary">{{ $batchId ?: 'Belum ada proses aktif' }}</span>
+            </p>
 
-    @if(session('status_message'))
-        <div class="alert alert-info">
-            {{ session('status_message') }}
+            @if(session('status_message'))
+                <div class="alert alert-info alert-dismissible fade show" role="alert">
+                    {{ session('status_message') }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            @endif
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-cogs"></i> Parameter Global Digunakan</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        <li>Minimum Support: <span class="badge bg-info">{{ $minSupport * 100 }}%</span></li>
+                        <li>Minimum Confidence: <span class="badge bg-success">{{ $minConfidence * 100 }}%</span></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- TAHAP 2: Frequent 1-Itemsets Global (Hasil Job 2B) --}}
+    @if ($job2bSelesai && $oneItemsetsFrequentGlobal && !empty($oneItemsetsFrequentGlobal['itemsets_1']))
+        <div class="card my-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-cubes"></i> Frequent 1-Itemsets Global (Support &ge; {{ $minSupport * 100 }}%)</h5>
+            </div>
+            <div class="card-body">
+                <p>Total Frequent 1-Itemset: <span class="badge bg-secondary">{{ count($oneItemsetsFrequentGlobal['itemsets_1']) }}</span></p>
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 5%;">No</th>
+                                <th>Itemset</th>
+                                <th style="width: 15%;">Support</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($oneItemsetsFrequentGlobal['itemsets_1'] as $index => $item)
+                                <tr>
+                                    <td>{{ $index + 1 }}</td>
+                                    <td>{{ $item['itemset_display'] }}</td>
+                                    <td><span class="badge bg-light-info text-info-emphasis">{{ $item['support_value_display'] }}</span></td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    @elseif ($job2bSelesai && (!$oneItemsetsFrequentGlobal || empty($oneItemsetsFrequentGlobal['itemsets_1'])))
+        <div class="alert alert-warning my-4" role="alert">
+           <i class="fas fa-info-circle"></i> Tahap 2 (Perhitungan Support) selesai, namun tidak ada 1-Itemset yang memenuhi minimum support global ({{ $minSupport * 100 }}%).
+        </div>
+    @elseif ($job1bSelesaiDanAdaData && $statusProsesGlobal === \App\Http\Controllers\AprioriController::STATUS_GLOBAL_JOB1B_COMPLETED_JOB2B_DISPATCHED)
+        <div class="alert alert-info my-4" role="alert">
+            <div class="spinner-border spinner-border-sm me-2" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            Tahap 2 (Perhitungan Support untuk Frequent Itemsets) sedang diproses...
         </div>
     @endif
 
-    <h2>Parameter Global yang Digunakan (Default atau dari Konfigurasi):</h2>
-    <ul>
-        <li>Minimum Support (untuk Job 2b): {{ $minSupport * 100 }}%</li>
-        <li>Minimum Confidence (untuk Job 3b): {{ $minConfidence * 100 }}%</li>
-    </ul>
-
-    <h2>Status Proses Global Saat Ini:</h2>
-    <p>
-        <strong>Status:</strong>
-        @if ($statusProsesGlobal === \App\Http\Controllers\AprioriController::STATUS_GLOBAL_ALL_JOBS_COMPLETED)
-            <span class="badge bg-success">Semua Job Selesai</span>
-        @elseif ($statusProsesGlobal === \App\Http\Controllers\AprioriController::STATUS_GLOBAL_JOB1B_COMPLETED_JOB2B_DISPATCHED || $statusProsesGlobal === \App\Http\Controllers\AprioriController::STATUS_GLOBAL_JOB2B_COMPLETED_JOB3B_DISPATCHED)
-            <span class="badge bg-primary">Job Lanjutan Sedang Berjalan</span> (Job 1b Selesai)
-        @elseif ($statusProsesGlobal === \App\Http\Controllers\AprioriController::STATUS_GLOBAL_JOB1B_DISPATCHED)
-            <span class="badge bg-info text-dark">Job 1b (Kombinasi Itemset) Sedang Berjalan</span>
-            <div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div>
-        @elseif (Str::startsWith($statusProsesGlobal, \App\Http\Controllers\AprioriController::STATUS_GLOBAL_FAILED_PREFIX))
-            <span class="badge bg-danger">Proses Gagal</span> (Detail: {{ $statusProsesGlobal }})
-        @elseif ($statusProsesGlobal === \App\Http\Controllers\AprioriController::STATUS_GLOBAL_NOT_STARTED && $batchId)
-             <span class="badge bg-warning text-dark">Inisiasi Proses</span> (Refresh untuk memulai)
-        @else
-            <span class="badge bg-secondary">{{ $statusProsesGlobal ?: 'Belum Dimulai' }}</span>
-        @endif
-    </p>
-
-    @if (!in_array($statusProsesGlobal, [\App\Http\Controllers\AprioriController::STATUS_GLOBAL_ALL_JOBS_COMPLETED, \App\Http\Controllers\AprioriController::STATUS_GLOBAL_NOT_STARTED]) && !Str::startsWith($statusProsesGlobal, \App\Http\Controllers\AprioriController::STATUS_GLOBAL_FAILED_PREFIX))
-        <p class="mt-2">Halaman ini dapat di-refresh untuk melihat update status. Implementasi auto-refresh dengan JavaScript bisa ditambahkan.</p>
-        <script>
-            // setTimeout(function(){ window.location.reload(1); }, 30000); // Refresh setiap 30 detik
-        </script>
+    {{-- TAHAP 3: Aturan Asosiasi Global dari 2 & 3 Itemset (Hasil Job 3B) --}}
+    @if ($job3bSelesai && $rulesFromTwoAndThreeItemsetsGlobal !== null)
+        <div class="card my-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-share-alt"></i> Aturan Asosiasi Global (dari 2 & 3 Itemset, Confidence &ge; {{ $minConfidence * 100 }}%)</h5>
+            </div>
+            <div class="card-body">
+                @if(empty($rulesFromTwoAndThreeItemsetsGlobal))
+                    <div class="alert alert-warning mb-0">
+                        <i class="fas fa-exclamation-triangle"></i> Tidak ada aturan asosiasi yang terbentuk dari 2 atau 3 itemset yang memenuhi threshold minimum confidence global, atau tidak ada frequent itemset yang cukup untuk membentuk aturan tersebut.
+                    </div>
+                @else
+                    <p>Total Aturan Ditemukan: <span class="badge bg-secondary">{{ count($rulesFromTwoAndThreeItemsetsGlobal) }}</span></p>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover table-sm">
+                            <thead class="table-success">
+                                <tr>
+                                    <th style="width: 5%;">No</th>
+                                    <th>Aturan (IF <i class="fas fa-arrow-right"></i> THEN)</th>
+                                    <th style="width: 12%;">Confidence</th>
+                                    <th style="width: 10%;">Lift</th>
+                                    <th style="width: 12%;">Support Aturan</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($rulesFromTwoAndThreeItemsetsGlobal as $index => $rule)
+                                    <tr>
+                                        <td>{{ $index + 1 }}</td>
+                                        <td>
+                                            <span class="fw-bold">{{ $rule['antecedent_display'] }}</span>
+                                            <span class="text-muted mx-1">&rarr;</span>
+                                            <span class="fw-bold text-primary">{{ $rule['consequent_display'] }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-success-subtle text-success-emphasis">{{ $rule['confidence'] }}</span>
+                                        </td>
+                                        <td>
+                                            @php $liftVal = (float)str_replace(',', '.', $rule['lift']); @endphp
+                                            @if($liftVal > 1)
+                                                <span class="badge bg-info-subtle text-info-emphasis" title="Hubungan Positif">{{ $rule['lift'] }}</span>
+                                            @elseif($liftVal == 1)
+                                                <span class="badge bg-secondary-subtle text-secondary-emphasis" title="Tidak Ada Hubungan Khusus">{{ $rule['lift'] }}</span>
+                                            @else
+                                                <span class="badge bg-warning-subtle text-warning-emphasis" title="Hubungan Negatif">{{ $rule['lift'] }}</span>
+                                            @endif
+                                        </td>
+                                        <td><span class="badge bg-light-info text-info-emphasis">{{ $rule['support_rule'] }}</span></td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="alert alert-secondary mt-3 p-2 small">
+                        <strong>Interpretasi Nilai:</strong>
+                        <ul class="mb-0 ps-3">
+                            <li><strong>Confidence:</strong> Probabilitas munculnya consequent (THEN) jika antecedent (IF) muncul.</li>
+                            <li><strong>Support Aturan:</strong> Seberapa sering keseluruhan item dalam aturan muncul bersamaan dalam transaksi.</li>
+                            <li><strong>Lift:</strong> Kekuatan hubungan. Lift > 1 (Positif), Lift = 1 (Netral), Lift < 1 (Negatif).</li>
+                        </ul>
+                    </div>
+                @endif
+            </div>
+        </div>
+     @elseif ($job2bSelesai && $job1bSelesaiDanAdaData && ($statusProsesGlobal === \App\Http\Controllers\AprioriController::STATUS_GLOBAL_JOB2B_COMPLETED_JOB3B_DISPATCHED || $statusProsesGlobal === \App\Http\Controllers\AprioriController::STATUS_GLOBAL_JOB1B_COMPLETED_JOB2B_DISPATCHED) && !$job3bSelesai )
+        {{-- Kondisi ini menangkap saat job 2 selesai dan job 3 sedang dispatch --}}
+        <div class="alert alert-info my-4" role="alert">
+            <div class="spinner-border spinner-border-sm me-2" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            Tahap 3 (Pembuatan Aturan Asosiasi Global) sedang diproses...
+        </div>
     @endif
 
-    <hr>
 
-    @if ($job1bSelesaiDanAdaData && $rawFormattedItemsetsGlobal)
-        <h2>Kombinasi Itemset yang Dihasilkan (Job 1b):</h2>
-        <p>Total Kombinasi: {{ $rawFormattedItemsetsGlobal['total_kombinasi'] }}</p>
-        @if(empty($rawFormattedItemsetsGlobal['itemsets_1']) && empty($rawFormattedItemsetsGlobal['itemsets_2']) && empty($rawFormattedItemsetsGlobal['itemsets_3']))
-            <p>Tidak ada kombinasi itemset yang dihasilkan untuk batch global ini.</p>
-        @else
-            @if(!empty($rawFormattedItemsetsGlobal['itemsets_1']))
-                <h3>1-Itemset:</h3>
-                <ul>
-                    @foreach($rawFormattedItemsetsGlobal['itemsets_1'] as $item)
-                        <li>{{ $item['itemset_display'] }} (Support: {{ $item['support_value_display'] }})</li>
-                    @endforeach
-                </ul>
-            @endif
-            @if(!empty($rawFormattedItemsetsGlobal['itemsets_2']))
-                <h3>2-Itemset:</h3>
-                <ul>
-                    @foreach($rawFormattedItemsetsGlobal['itemsets_2'] as $item)
-                        <li>{{ $item['itemset_display'] }} (Support: {{ $item['support_value_display'] }})</li>
-                    @endforeach
-                </ul>
-            @endif
-            @if(!empty($rawFormattedItemsetsGlobal['itemsets_3']))
-                <h3>3-Itemset:</h3>
-                <ul>
-                    @foreach($rawFormattedItemsetsGlobal['itemsets_3'] as $item)
-                        <li>{{ $item['itemset_display'] }} (Support: {{ $item['support_value_display'] }})</li>
-                    @endforeach
-                </ul>
-            @endif
-        @endif
-    @elseif ($statusProsesGlobal === \App\Http\Controllers\AprioriController::STATUS_GLOBAL_JOB1B_DISPATCHED)
-        <p>Kombinasi itemset global sedang dibuat...</p>
-    @elseif ($statusProsesGlobal === \App\Http\Controllers\AprioriController::STATUS_GLOBAL_NOT_STARTED && !$batchId)
-        <p>Proses pembuatan data Apriori global belum pernah dijalankan. Halaman ini akan mencoba memicunya.</p>
+    @if ($statusProsesGlobal === \App\Http\Controllers\AprioriController::STATUS_GLOBAL_ALL_JOBS_COMPLETED && !$oneItemsetsFrequentGlobal && !$rulesFromTwoAndThreeItemsetsGlobal)
+        <div class="alert alert-light border mt-4">
+           <i class="fas fa-check-circle text-success"></i> Semua proses global telah selesai, namun tidak ditemukan frequent 1-itemset atau aturan asosiasi yang relevan berdasarkan parameter yang diberikan.
+        </div>
     @endif
 
-    {{-- Placeholder untuk Frequent Itemsets Global (Hasil Job 2b) --}}
-    @if ($frequentItemsetsGlobal)
-        <hr>
-        <h2>Frequent Itemsets Global (Hasil Job 2b):</h2>
-        {{-- Logika untuk menampilkan frequent itemsets global --}}
-    @elseif ($job1bSelesaiDanAdaData && $statusProsesGlobal === \App\Http\Controllers\AprioriController::STATUS_GLOBAL_JOB1B_COMPLETED_JOB2B_DISPATCHED)
-        <hr>
-        <p>Frequent itemsets global sedang dihitung (Job 2b sedang berjalan)...</p>
-         <div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div>
-    @endif
-
-    {{-- Placeholder untuk Aturan Asosiasi Global (Hasil Job 3b) --}}
-    @if ($rulesGlobal)
-        <hr>
-        <h2>Aturan Asosiasi Global (Hasil Job 3b):</h2>
-        {{-- Logika untuk menampilkan aturan asosiasi global --}}
-    @elseif ($job1bSelesaiDanAdaData && $statusProsesGlobal === \App\Http\Controllers\AprioriController::STATUS_GLOBAL_JOB2B_COMPLETED_JOB3B_DISPATCHED)
-        <hr>
-        <p>Aturan asosiasi global sedang dibuat (Job 3b sedang berjalan)...</p>
-        <div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div>
-    @endif
-
-    <div class="mt-4">
-        <a href="{{ route('apriori.index') }}" class="btn btn-secondary">Kembali ke Form Input Interaktif</a>
+    <div class="my-4 text-center">
+        <a href="{{ route('apriori.index') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Kembali ke Form Input Interaktif
+        </a>
     </div>
 </div>
 @endsection
