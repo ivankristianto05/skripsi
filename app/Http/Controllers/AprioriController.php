@@ -100,111 +100,159 @@ class AprioriController extends Controller
         }
     }
 
-    public function hasilProcessing(Request $request, $batchId) // Untuk hasil interaktif
-    {
-        $processData = session('apriori_process_' . $batchId);
-        if (!$processData) {
-            return redirect()->route('apriori.index')->withErrors(['error' => 'Data proses interaktif untuk Batch ID tidak ditemukan atau session berakhir.']);
-        }
+    public function hasilProcessing(Request $request, $batchId)
+{
+    $processData = session('apriori_process_' . $batchId);
+    if (!$processData) {
+        return redirect()->route('apriori.index')->withErrors(['error' => 'Data proses interaktif untuk Batch ID tidak ditemukan atau session berakhir.']);
+    }
 
-        // Ambil target produk kode dari session untuk filtering
-        $targetProdukKode = $processData['target_produk_kode'] ?? null;
+    $targetProdukKode = $processData['target_produk_kode'] ?? null;
+    $minSupportUserInput = (float) $processData['min_support'];
+    
+    // Refresh status dengan pengecekan yang lebih akurat
+    $statusBaru = $this->refreshJobStatus($batchId, $minSupportUserInput);
+    
+    // Update processData dengan status terbaru
+    $processData = array_merge($processData, $statusBaru);
+    session(['apriori_process_' . $batchId => $processData]);
 
-        $itemsetKombinasi = Itemset::where('apriori_batch_id', $batchId)->orderBy('item_count')->orderBy('id')->get();
-        $job1Completed = $itemsetKombinasi->isNotEmpty();
-        $itemsetKombinasiCount = $itemsetKombinasi->count();
-        
-        // PERUBAHAN: Filter $itemsetKombinasi (untuk rawFormattedItemsets) jika targetProdukKode ada
-        $itemsetKombinasiUntukRaw = clone $itemsetKombinasi; // Clone agar tidak mempengaruhi $itemsetKombinasi asli jika masih dipakai
-        if ($job1Completed && $targetProdukKode) {
-            $itemsetKombinasiUntukRaw = $itemsetKombinasiUntukRaw->filter(function ($itemset) use ($targetProdukKode) {
-                // Pastikan $itemset->items adalah array (via $casts di Model)
+    // Ambil data berdasarkan status terbaru
+    $koleksiUntukTampilanRaw = collect();
+    if ($processData['job1_completed']) {
+        $koleksiUntukTampilanRaw = Itemset::where('apriori_batch_id', $batchId)
+            ->where('support_value', '>=', $minSupportUserInput)
+            ->orderBy('item_count')
+            ->orderBy('id')
+            ->get();
+
+        if ($targetProdukKode && $koleksiUntukTampilanRaw->isNotEmpty()) {
+            $koleksiUntukTampilanRaw = $koleksiUntukTampilanRaw->filter(function ($itemset) use ($targetProdukKode) {
                 return is_array($itemset->items) && in_array($targetProdukKode, $itemset->items);
             });
         }
-        $rawFormattedItemsets = $job1Completed ? $this->formatItemsetsForView($itemsetKombinasiUntukRaw, true) : null;
-
-        $job2Completed = false;
-        $frequentItemsets = null;
-        $frequentItemsetModels = collect(); // Inisialisasi sebagai koleksi kosong
-
-        if ($job1Completed) {
-            $itemsetDenganSupportCount = Itemset::where('apriori_batch_id', $batchId)->whereNotNull('support_value')->count();
-            if ($itemsetKombinasiCount > 0 && $itemsetDenganSupportCount >= $itemsetKombinasiCount) {
-                $job2Completed = true;
-                $frequentItemsetModels = Itemset::where('apriori_batch_id', $batchId)
-                                                ->where('support_value', '>=', $processData['min_support'])
-                                                ->orderBy('item_count')->orderBy('support_value', 'desc')->get();
-                
-                // PERUBAHAN: Filter frequent itemsets jika targetProdukKode ada
-                if ($targetProdukKode && $frequentItemsetModels->isNotEmpty()) {
-                    $frequentItemsetModels = $frequentItemsetModels->filter(function ($itemset) use ($targetProdukKode) {
-                        return is_array($itemset->items) && in_array($targetProdukKode, $itemset->items);
-                    });
-                }
-                $frequentItemsets = $this->formatItemsetsForView($frequentItemsetModels);
-            }
-        }
-
-        $job3Completed = false;
-        $rules = null;
-        $rulesCollection = collect(); // Inisialisasi sebagai koleksi kosong
-
-        if ($job2Completed) { // Hanya proses jika Job 2 selesai
-            $rulesCollection = AssociationRule::where('apriori_batch_id', $batchId)
-                                            ->orderBy('confidence', 'desc')->orderBy('lift', 'desc')->get();
-            
-            if($rulesCollection->isNotEmpty()){ // Jika Job 3 menghasilkan aturan
-                $job3Completed = true; // Tandai Job 3 selesai karena ada data asli
-                
-                // PERUBAHAN: Filter association rules jika targetProdukKode ada
-                if ($targetProdukKode) { // Tidak perlu ->isNotEmpty() karena filter akan mengembalikan koleksi kosong jika tidak ada yg cocok
-                    $rulesCollection = $rulesCollection->filter(function ($rule) use ($targetProdukKode) {
-                        // Pastikan $rule->antecedent dan $rule->consequent adalah array (via $casts di Model)
-                        $isAntecedentArray = is_array($rule->antecedent);
-                        $isConsequentArray = is_array($rule->consequent);
-                        return ($isAntecedentArray && in_array($targetProdukKode, $rule->antecedent)) || 
-                               ($isConsequentArray && in_array($targetProdukKode, $rule->consequent));
-                    });
-                }
-                $rules = $this->formatRulesForView($rulesCollection); // $rules akan jadi array kosong jika semua aturan terfilter
-            }
-        }
-        
-        // Update status di session untuk refleksi di view
-        $processData['status_current'] = $job3Completed ? self::STATUS_GLOBAL_ALL_JOBS_COMPLETED : 
-                                        ($job2Completed ? self::STATUS_GLOBAL_JOB2B_COMPLETED_JOB3B_DISPATCHED :
-                                        ($job1Completed ? self::STATUS_GLOBAL_JOB1B_COMPLETED_JOB2B_DISPATCHED :
-                                        ($processData['status_current'] ?? self::STATUS_GLOBAL_JOB1B_DISPATCHED)));
-        
-        $processData['status_job1'] = $job1Completed ? 'completed' : 'dispatched';
-        $processData['status_job2'] = $job2Completed ? 'completed' : ($job1Completed ? 'dispatched' : 'waiting');
-        $processData['status_job3'] = $job3Completed ? 'completed' : ($job2Completed ? 'dispatched' : 'waiting');
-        
-        session(['apriori_process_' . $batchId => $processData]);
-
-        $basicStats = AprioriService::getBasicStatistics();
-
-        return view('apriori.hasil', [
-            'batchId' => $batchId, 
-            'processData' => $processData,
-            'job1Completed' => $job1Completed, 
-            'job2Completed' => $job2Completed, 
-            'job3Completed' => $job3Completed, // Ini menandakan apakah job 3 *asli* selesai, bukan apakah hasil filter ada isinya
-            'itemsetKombinasiCount' => $itemsetKombinasiCount, // Jumlah total kombinasi asli
-            'rawFormattedItemsets' => $rawFormattedItemsets, // Ini sudah difilter
-            'frequentItemsets' => $frequentItemsets,       // Ini sudah difilter
-            'rules' => $rules,                            // Ini sudah difilter
-            'basicStats' => $basicStats, 
-            'minSupport' => $processData['min_support'],
-            'minConfidence' => $processData['min_confidence'],
-            'produkTerpilih' => (object) ['nama_produk' => $processData['produk_terpilih_nama'], 'kode_produk' => $processData['target_produk_kode']],
-            'namaProduk' => $processData['target_produk_kode'], 
-            'kategoriProduk' => $processData['kategori_produk'],
-        ]);
     }
 
-    // ... (method tampilkanHasilGlobal dan helper lainnya tetap sama) ...
+    $rawFormattedItemsets = $koleksiUntukTampilanRaw->isNotEmpty() ? 
+        $this->formatItemsetsForView($koleksiUntukTampilanRaw, true) : null;
+    $itemsetKombinasiCountView = $rawFormattedItemsets ? $rawFormattedItemsets['total_kombinasi'] : 0;
+
+    // Frequent itemsets
+    $frequentItemsetModels = collect();
+    if ($processData['job2_completed']) {
+        $frequentItemsetModels = Itemset::where('apriori_batch_id', $batchId)
+            ->where('support_value', '>=', $minSupportUserInput)
+            ->orderBy('item_count')
+            ->orderBy('support_value', 'desc')
+            ->get();
+    }
+    $frequentItemsets = $this->formatItemsetsForView($frequentItemsetModels, false);
+
+    // Association rules
+    $rules = null;
+    if ($processData['job3_completed']) {
+        $rulesCollection = AssociationRule::where('apriori_batch_id', $batchId)
+            ->orderBy('confidence', 'desc')
+            ->orderBy('lift', 'desc')
+            ->get();
+
+        if ($rulesCollection->isNotEmpty()) {
+            $rulesUntukTampilan = $rulesCollection;
+            if ($targetProdukKode) {
+                $rulesUntukTampilan = $rulesCollection->filter(function ($rule) use ($targetProdukKode) {
+                    $isAntecedentArray = is_array($rule->antecedent);
+                    $isConsequentArray = is_array($rule->consequent);
+                    return ($isAntecedentArray && in_array($targetProdukKode, $rule->antecedent)) ||
+                           ($isConsequentArray && in_array($targetProdukKode, $rule->consequent));
+                });
+            }
+
+            $rules = $rulesUntukTampilan->isNotEmpty() ? 
+                $this->formatRulesForView($rulesUntukTampilan) : [];
+        } else {
+            $rules = [];
+        }
+    }
+
+    $basicStats = AprioriService::getBasicStatistics();
+    
+    return view('apriori.hasil', [
+        'batchId' => $batchId,
+        'processData' => $processData,
+        'job1Completed' => $processData['job1_completed'], 
+        'job2Completed' => $processData['job2_completed'], 
+        'job3Completed' => $processData['job3_completed'], 
+        'itemsetKombinasiCount' => $itemsetKombinasiCountView,
+        'rawFormattedItemsets' => $rawFormattedItemsets,
+        'frequentItemsets' => $frequentItemsets,
+        'rules' => $rules,
+        'basicStats' => $basicStats,
+        'minSupport' => $minSupportUserInput,
+        'minConfidence' => $processData['min_confidence'],
+        'produkTerpilih' => (object) ['nama_produk' => $processData['produk_terpilih_nama'], 'kode_produk' => $targetProdukKode],
+        'namaProduk' => $targetProdukKode,
+        'kategoriProduk' => $processData['kategori_produk'],
+    ]);
+}
+
+/**
+ * Method baru untuk refresh status job secara akurat
+ */
+private function refreshJobStatus($batchId, $minSupportUserInput)
+{
+    // Job 1: Pengecekan kombinasi itemset
+    $totalItemsets = Itemset::where('apriori_batch_id', $batchId)->count();
+    $job1Completed = $totalItemsets > 0;
+
+    // Job 2: Pengecekan kalkulasi support
+    $job2Completed = false;
+    if ($job1Completed) {
+        $itemsetDenganSupport = Itemset::where('apriori_batch_id', $batchId)
+            ->whereNotNull('support_value')
+            ->count();
+        $job2Completed = $itemsetDenganSupport >= $totalItemsets && $totalItemsets > 0;
+    }
+
+    // Job 3: Pengecekan aturan asosiasi
+    $job3Completed = false;
+    if ($job2Completed) {
+        // Cek apakah ada frequent itemsets yang memenuhi min_support
+        $frequentItemsetsCount = Itemset::where('apriori_batch_id', $batchId)
+            ->where('support_value', '>=', $minSupportUserInput)
+            ->where('item_count', '>', 1) // Rules butuh minimal 2-itemset
+            ->count();
+            
+        if ($frequentItemsetsCount > 0) {
+            // Ada potential untuk rules, cek apakah rules sudah dibuat
+            $rulesCount = AssociationRule::where('apriori_batch_id', $batchId)->count();
+            $job3Completed = $rulesCount >= 0; // >= 0 karena bisa saja tidak ada rules yang memenuhi min_confidence
+        } else {
+            // Tidak ada frequent itemsets yang cukup untuk membuat rules
+            $job3Completed = true;
+        }
+    }
+
+    // Tentukan status keseluruhan
+    $statusCurrent = self::STATUS_GLOBAL_JOB1B_DISPATCHED;
+    if ($job3Completed) {
+        $statusCurrent = self::STATUS_GLOBAL_ALL_JOBS_COMPLETED;
+    } elseif ($job2Completed) {
+        $statusCurrent = self::STATUS_GLOBAL_JOB2B_COMPLETED_JOB3B_DISPATCHED;
+    } elseif ($job1Completed) {
+        $statusCurrent = self::STATUS_GLOBAL_JOB1B_COMPLETED_JOB2B_DISPATCHED;
+    }
+
+    return [
+        'job1_completed' => $job1Completed,
+        'job2_completed' => $job2Completed, 
+        'job3_completed' => $job3Completed,
+        'status_current' => $statusCurrent,
+        'status_job1' => $job1Completed ? 'completed' : 'dispatched',
+        'status_job2' => $job2Completed ? 'completed' : ($job1Completed ? 'dispatched' : 'waiting'),
+        'status_job3' => $job3Completed ? 'completed' : ($job2Completed ? 'dispatched' : 'waiting'),
+        'last_checked' => now()->toDateTimeString(),
+    ];
+}
     public function tampilkanHasilGlobal(Request $request)
     {
         $activeGlobalBatchId = Cache::get(self::CACHE_KEY_GLOBAL_ACTIVE_BATCH_ID);

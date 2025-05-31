@@ -31,23 +31,62 @@
                     <span class="badge bg-success">{{ $minConfidence * 100 }}%</span></p>
                 </div>
             </div>
-            <p class="mb-0 text-muted"><small>Waktu Submit: {{ \Carbon\Carbon::parse($processData['submitted_at'])->format('d M Y H:i:s') }}</small></p>
+            <div class="row">
+                <div class="col-md-8">
+                    <p class="mb-0 text-muted"><small>Waktu Submit: {{ \Carbon\Carbon::parse($processData['submitted_at'])->format('d M Y H:i:s') }}</small></p>
+                </div>
+                <div class="col-md-4 text-end">
+                    @if(isset($processData['last_checked']))
+                        <p class="mb-0 text-muted"><small>Last Check: {{ \Carbon\Carbon::parse($processData['last_checked'])->format('H:i:s') }}</small></p>
+                    @endif
+                </div>
+            </div>
         </div>
     </div>
-
-    {{-- Auto refresh jika belum semua job selesai --}}
+    {{-- Auto refresh dengan interval yang lebih panjang dan kondisi yang lebih tepat --}}
     @if (!$job3Completed)
         <div class="text-center mb-4">
             <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">Loading...</span>
             </div>
-            <p class="mt-2">Sedang memproses data... Halaman akan di-refresh otomatis.</p>
+            <p class="mt-2">Sedang memproses data... 
+                <span id="countdown">30</span> detik hingga refresh otomatis.
+                <button onclick="window.location.reload()" class="btn btn-sm btn-outline-primary ms-2">
+                    <i class="fas fa-sync-alt"></i> Refresh Sekarang
+                </button>
+            </p>
         </div>
-        <script> setTimeout(function(){ window.location.reload(1); }, 10000); </script>
+        
+        <script>
+        let countdown = 30;
+        const countdownElement = document.getElementById('countdown');
+        
+        const timer = setInterval(function() {
+            countdown--;
+            if (countdownElement) {
+                countdownElement.textContent = countdown;
+            }
+            
+            if (countdown <= 0) {
+                clearInterval(timer);
+                window.location.reload();
+            }
+        }, 1000);
+        
+        // Auto refresh setelah 30 detik
+        setTimeout(function(){ 
+            window.location.reload(1); 
+        }, 30000);
+        </script>
+    @else
+        {{-- Tampilkan pesan sukses jika semua job selesai --}}
+        <div class="alert alert-success">
+            <i class="fas fa-check-circle"></i> Semua proses analisis Apriori telah selesai!
+        </div>
     @endif
 
     {{-- Kombinasi Itemset --}}
-    @if ($job1Completed && $rawFormattedItemsets && $job3Completed)
+    @if ($job1Completed && $rawFormattedItemsets)
         <div class="card mb-4">
             <div class="card-header bg-info text-white">
                 <h5 class="mb-0"><i class="fas fa-list"></i> Kombinasi Itemset</h5>
@@ -102,7 +141,7 @@
                                         <i class="fas fa-cubes me-2"></i> 2-Itemset ({{ count($rawFormattedItemsets['itemsets_2']) }} kombinasi)
                                     </button>
                                 </h2>
-                                <div id="collapse2" class="accordion-collapse collapse" data-bs-parent="#accordionItemsets">
+                                <div id="collapse2" class="accordion-collapse" data-bs-parent="#accordionItemsets">
                                     <div class="accordion-body">
                                         <div class="table-responsive">
                                             <table class="table table-sm table-striped">
@@ -136,7 +175,7 @@
                                         <i class="fas fa-layer-group me-2"></i> 3-Itemset ({{ count($rawFormattedItemsets['itemsets_3']) }} kombinasi)
                                     </button>
                                 </h2>
-                                <div id="collapse3" class="accordion-collapse collapse" data-bs-parent="#accordionItemsets">
+                                <div id="collapse3" class="accordion-collapse" data-bs-parent="#accordionItemsets">
                                     <div class="accordion-body">
                                         <div class="table-responsive">
                                             <table class="table table-sm table-striped">
@@ -169,7 +208,7 @@
     @endif
 
     {{-- Aturan Asosiasi --}}
-    @if ($job3Completed && $rules)
+    @if ($job3Completed && $rules !== null)
         <div class="card mb-4">
             <div class="card-header bg-success text-white">
                 <h5 class="mb-0"><i class="fas fa-share-alt"></i> Aturan Asosiasi</h5>

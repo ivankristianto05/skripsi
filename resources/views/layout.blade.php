@@ -177,7 +177,7 @@
             <a href="{{ route('transaksis.index') }}" title="Transaksi" class="{{ request()->routeIs('transaksis.*') ? 'active' : '' }}">
                 <i class="bi bi-cart"></i> <span>Transaksi</span>
             </a>
-            <a href="{{ route('apriori.index') }}" title="Rekomendasi" class="{{ request()->routeIs('apriori.index') ? 'active' : '' }}">
+            <a href="{{ route('apriori.index') }}" title="Pengujian" class="{{ request()->routeIs('apriori.index') ? 'active' : '' }}">
                 <i class="bi bi-diagram-3"></i> <span>Rekomendasi</span>
             </a>
         </div>
