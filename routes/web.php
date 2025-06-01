@@ -22,7 +22,6 @@ Route::middleware(['auth'])->group(function () {
     
     // Route untuk user dan admin - hanya melihat produk
     Route::get('/produk', [ProdukController::class, 'index'])->name('produk.index');
-    Route::get('/produk/{produk}', [ProdukController::class, 'show'])->name('produk.show');
     
     // Route untuk melihat hasil global apriori - user dan admin
     Route::get('/apriori/hasil', [AprioriController::class, 'tampilkanHasilGlobal'])->name('apriori.hasil.global');

@@ -2,13 +2,20 @@
 
 @section('content')
     <h1>Daftar Produk</h1>
-    <a href="{{ route('produk.create') }}" class="btn btn-primary mb-3">
-    <i class="bi bi-plus-circle"></i> Tambah Produk
-    </a>
-    <a href="{{ route('produk.import.form') }}" class="btn btn-success mb-3 ms-2">
-    <i class="bi bi-upload"></i> Import Produk
-    </a>
 
+    {{-- Tombol Tambah dan Import hanya untuk Admin --}}
+    @auth
+        @if(auth()->user()->role === 'admin')
+            <a href="{{ route('produk.create') }}" class="btn btn-primary mb-3">
+                <i class="bi bi-plus-circle"></i> Tambah Produk
+            </a>
+            <a href="{{ route('produk.import.form') }}" class="btn btn-success mb-3 ms-2">
+                <i class="bi bi-upload"></i> Import Produk
+            </a>
+        @endif
+    @endauth
+
+    {{-- Notifikasi sukses --}}
     @if(session('success'))
         <div class="alert alert-success">{{ session('success') }}</div>
     @endif
@@ -44,7 +51,11 @@
                 <th>Kode</th>
                 <th>Nama</th>
                 <th>Kategori</th>
-                <th>Aksi</th>
+                @auth
+                    @if(auth()->user()->role === 'admin')
+                        <th>Aksi</th>
+                    @endif
+                @endauth
             </tr>
         </thead>
         <tbody>
@@ -53,17 +64,23 @@
                     <td>{{ $produk->kode_produk }}</td>
                     <td>{{ $produk->nama_produk }}</td>
                     <td>{{ $produk->kategori_produk }}</td>
-                    <td>
-                        <a href="{{ route('produk.edit', $produk) }}" class="btn btn-sm btn-warning">Edit</a>
-                        <form action="{{ route('produk.destroy', $produk) }}" method="POST" style="display:inline-block;">
-                            @csrf @method('DELETE')
-                            <button onclick="return confirm('Yakin hapus?')" class="btn btn-sm btn-danger">Hapus</button>
-                        </form>
-                    </td>
+                    @auth
+                        @if(auth()->user()->role === 'admin')
+                            <td>
+                                <a href="{{ route('produk.edit', $produk) }}" class="btn btn-sm btn-warning">Edit</a>
+                                <form action="{{ route('produk.destroy', $produk) }}" method="POST" style="display:inline-block;">
+                                    @csrf @method('DELETE')
+                                    <button onclick="return confirm('Yakin hapus?')" class="btn btn-sm btn-danger">Hapus</button>
+                                </form>
+                            </td>
+                        @endif
+                    @endauth
                 </tr>
             @empty
                 <tr>
-                    <td colspan="4" class="text-center">Produk tidak ditemukan.</td>
+                    <td colspan="{{ auth()->check() && auth()->user()->role === 'admin' ? 4 : 3 }}" class="text-center">
+                        Produk tidak ditemukan.
+                    </td>
                 </tr>
             @endforelse
         </tbody>
@@ -71,6 +88,6 @@
 
     <!-- Pagination -->
     <div class="d-flex justify-content-center mt-3">
-        {{ $produks->links('pagination::bootstrap-4') }} <!-- Menampilkan kontrol pagination menggunakan Bootstrap 5 -->
+        {{ $produks->links('pagination::bootstrap-4') }}
     </div>
 @endsection

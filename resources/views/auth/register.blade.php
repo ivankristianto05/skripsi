@@ -127,14 +127,6 @@
                                        placeholder="Ulangi password Anda"
                                        required>
                             </div>
-
-                            <div class="mb-3">
-                                <small class="text-muted">
-                                    <i class="fas fa-info-circle me-1"></i>
-                                    Akun yang didaftarkan akan memiliki role <strong>User</strong> secara otomatis.
-                                </small>
-                            </div>
-
                             <button type="submit" class="btn btn-primary btn-register w-100">
                                 <i class="fas fa-user-plus me-2"></i>Daftar
                             </button>
